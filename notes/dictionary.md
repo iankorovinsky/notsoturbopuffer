@@ -1,0 +1,42 @@
+# Dictionary
+
+Stores big words I tend to forget.
+
+| Term      | Definition                                                                                     |
+|-----------|------------------------------------------------------------------------------------------------|
+| NVMe SSD  | Non-Volatile Memory Express Solid State Drive; a high-speed storage device that connects via the PCIe interface, offering faster data transfer rates and lower latency compared to traditional SATA SSDs. |
+| PCIe      | Peripheral Component Interconnect Express; a high-speed interface standard for connecting components like GPUs and SSDs to a computer's motherboard. |
+| SATA      | Serial ATA; an older computer bus interface that connects storage devices like hard drives and SSDs to the motherboard, offering lower speeds compared to PCIe. |
+| Namespace (S3) | In the context of S3, a namespace refers to a logical container or boundary that separates and organizes buckets and objects, ensuring data isolation between tenants or applications. |
+| WAL (Write Ahead Log) | turbopuffer's mechanism for ensuring data consistency and durability. Writes are batched for up to a second and committed to durable storage before being asynchronously indexed. Provides ~10,000+ vectors/sec write throughput. |
+| Exact Indexes | Precise indexing structures that guarantee 100% recall by exhaustively comparing queries against all indexed items, as opposed to approximate methods. Slower but always accurate. |
+| ANN (Approximate Nearest Neighbor) | Search strategy that trades small amount of accuracy (recall) for large performance gains. turbopuffer uses SPFresh to maintain >90-95% recall@10 even in large namespaces. |
+| SPFresh | Centroid-based ANN index used by turbopuffer for vector search. Incrementally updates clusters as vectors change while maintaining high recall, avoiding expensive full index rebuilds. Minimizes roundtrips for object storage. |
+| Inverted BM25 | A text search algorithm combining an inverted index (mapping terms to documents) with BM25 ranking (Best Matching 25), a probabilistic relevance function that scores documents based on term frequency and document length normalization. |
+| Attribute Index | Inverted indexes built for filterable attributes, enabling fast filtering and sorting. Aware of the primary vector index clustering hierarchy, allowing high-recall filtered vector searches. |
+| Cache Hierarchy | Multi-tier caching: object storage (source of truth) → NVMe SSD cache (recently queried namespaces) → memory cache (frequently accessed). Storage engine performs small ranged reads from object storage for fast cold queries. |
+| Compute-Storage Separation | All durable state stored in object storage, compute nodes are stateless. Any node can serve queries for any namespace. Enables immediate failover and cost-effective scaling without availability trade-offs. |
+| Filtering | Restricts query results to documents matching attribute conditions (equality, comparison, nested AND/OR, glob, regex). Filterable attributes are indexed into inverted indexes for fast evaluation. |
+| FTS/BM25 | Full-Text Search using Best Matching 25 ranking function. Scores documents by query term frequency and document length. Enabled per-attribute with dedicated BM25 indexes. Can be combined with vector search for hybrid search. |
+| Group Commit | Write batching technique combining multiple pending writes into single I/O operation. Buffers incoming writes while one is in flight, flushing all together when current completes. Decouples write throughput from I/O latency. |
+| Hybrid Search | Combines vector search (semantic relevance) and BM25 full-text search (exact keyword matching). Implemented via multi-query API with client-side result fusion (e.g., reciprocal-rank fusion). |
+| Indexing | After WAL commit, data is asynchronously indexed by separate indexing nodes (compute-compute separation). Unindexed data is still searched exhaustively for strongly consistent queries. Track progress via unindexed_bytes in metadata. |
+| LSM Tree (Log-Structured Merge) | Data structure that buffers writes in memory, flushes to immutable sorted runs, periodically merges (compacts) runs. turbopuffer's LSM is built natively on object storage with stateless compute nodes. |
+| Multi-Tenancy | turbopuffer is multi-tenant service (multiple orgs per binary) with tenant isolation. Also refers to unlimited namespaces per customer, each with isolated indexes for scaling to unlimited tenants/datasets. |
+| Namespace (turbopuffer) | Isolated container for documents and vectors. Each has own object storage prefix. Implicitly created on first insert. Recommend one namespace per query result set rather than using filters to separate data. |
+| Primary Key | Document ID uniquely identifying each document within namespace. Can be uint64, 128-bit UUID, or string up to 64 bytes. Used for updates, patches, and deletes. |
+| Query | Reads data from namespace via vector similarity, full-text search score, attribute conditions, or aggregations. See query API for syntax. |
+| Query and Indexing Nodes | Compute-compute separation: query nodes handle API requests (reads/writes), indexing nodes maintain indexes asynchronously. Both auto-scale with demand. Ensures indexing doesn't impact query performance. |
+| Read Consistency | Strong consistency by default: subsequent queries immediately see prior writes (~10ms latency floor). Eventual consistency option for sub-10ms latency (searches up to 128 MiB unindexed, up to 1 hour stale). 99.8%+ queries consistent even with eventual. |
+| Recall | Measures ANN search accuracy vs brute-force. recall@k = ratio of ANN results in top k exhaustive results. turbopuffer measures on 1% of live traffic, targeting 90-95% recall@10 for all queries including filtered. |
+| Regex/Glob Index | Trigram-based index for accelerating Glob and Regex filters when enabled in schema. Narrows candidates before exhaustive evaluation. |
+| Schema | Defines type and indexing behavior per attribute/vector. Attributes must have consistent types within namespace. All vectors in a column must have same dimensions. Auto-inferred by default, customizable via write request. |
+| Vectors and Documents | Documents are basic data unit with unique ID, containing vectors (float arrays for similarity search) and attributes (key-value pairs for filtering/sorting/FTS). Types must be consistent within namespace. |
+| Atomic Conditional Writes | Writes that evaluate their condition atomically with the write operation. The condition check and write happen as single operation, preventing race conditions where another write could occur between checking and updating. |
+| Atomic Batches | All writes in a single upsert request are applied simultaneously - either all succeed or all fail together. No partial writes. Ensures queries never see intermediate states with only some documents from a batch. |
+| First-Stage Retrieval | Initial pass in two-stage search pipeline that quickly filters millions of documents to small candidate set (e.g., 100-1000) using fast indexed operations (vector search, BM25, filters). Candidates then refined via second-stage reranking in application code with custom logic rather than query language. |
+| Cross-Cloud Latency | Network delay when calling services across different cloud providers (e.g., AWS app → GCP service). Same-region within provider: <1ms. Cross-cloud: 1-10ms. For vector search (>10ms query times), this overhead is typically acceptable. |
+| Cross-Cloud Egress Fees | Misconception: same-cloud connections are cheaper. Reality: without private connect, traffic leaving VPC goes through public internet at $0.05-0.09/GB regardless of destination cloud. Charged by your cloud provider, not the service. |
+| Private Connect/Link | Direct network connections between cloud providers bypassing public internet (AWS Private Link, GCP Private Service Connect, Azure Private Link). Reduces egress to $0.01/GB and lowers latency. Requires explicit setup, worth it for high-volume transfers. |
+| Egress | Data transfer charges when data leaves your VPC/cloud region. Charged by your cloud provider. Standard rates: $0.05-0.09/GB public internet, $0.01/GB with private link. Example: 1B vectors (6TB) = ~$600 standard egress. |
+| Namespace Pinning | Reserves compute and NVMe SSD cache for a specific namespace, switching billing from per-query (TB Queried) to GB-hours (namespace size × replicas × hours). |
