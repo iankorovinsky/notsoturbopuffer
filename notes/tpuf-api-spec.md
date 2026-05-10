@@ -1,4 +1,4 @@
-## Turbopuffer API Spec
+# Turbopuffer API Spec
 
 A copy of the turbopuffer API spec for visibility. Credits go to (as of 2026-05-09) to `https://github.com/turbopuffer/turbopuffer-openapi/blob/next/openapi.yml`.
 
